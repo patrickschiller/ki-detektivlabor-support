@@ -1,0 +1,46 @@
+name: Publish App Support Pages
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: app-store-pages
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Check out approved source
+        uses: actions/checkout@v4
+      - name: Check that draft content has been finalized
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          pages = sorted(Path('site').glob('*.html'))
+          assert pages, 'No HTML pages found.'
+          for page in pages:
+              text = page.read_text()
+              assert 'data-release-status="ready"' in text, f'{page}: still a draft.'
+              assert '[noch anzugeben]' not in text, f'{page}: public details missing.'
+          PY
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+      - name: Upload only the public website
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: site
+      - name: Deploy manually requested website
+        id: deployment
+        uses: actions/deploy-pages@v5
